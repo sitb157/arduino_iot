@@ -61,7 +61,7 @@ void handleClientRequest(EthernetClient client) {
   client.println();
   client.println("<html><body>");
   
-  String request = client.readStringUntil('\r'); // HTTP 요청을 읽음
+  String request = client.readStringUntil('\r');
 
   if (request.indexOf("/mobile") != -1) {
     // Mobile version
