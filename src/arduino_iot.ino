@@ -1,12 +1,21 @@
 #include <SPI.h>
 #include <Ethernet.h>
-#include <Servo.h>
+#include <EthernetUDP.h>
 
-byte mac[] = {0x90, 0xA2, 0xDA, 0x10, 0x53, 0x07}; // MAC Address 
-IPAddress ip(192, 168, 0, 50); // IP Address
-EthernetServer server(8080); // Port 8080
+byte mac[] = {0x40, 0xD2, 0xDA, 0x10, 0x53, 0x07}; // MAC Address 
+IPAddress ip(192, 168, 2, 123); // IP Address
+EthernetServer server(1234); // Port 
 
-int servoPosition = 90; // Intialize position 
+//The broadcast IP of our network
+byte broadCastIp[] = { 192 , 168, 2, 255 };
+//MAC address of the machine we want to wake up
+byte remote_MAC_ADD[] = { 0xXX, 0xXX, 0xXX, 0xXX, 0xXX, 0xXX };
+//UDP WOL port
+int wolPort = 7;
+//Magic Packet
+byte magicPacket[102];
+
+EthernetUDP Udp;
 
 //  Style Font Size
 int h1_font_size = 50;
@@ -16,26 +25,20 @@ int button_font_size_mobile = 25;
 // Button Action Name
 String action_name = "/server_power"; 
 String action_name_mobile = "/mobile/server_power";
-// Initalize servo position value
-Servo servo;
-int default_degree = 30;
-int power_on_degree = 160;
-int power_off_degree = 30;
 
 void setup()
 {
-    // You can use Ethernet.init(pin) to configure the CS pin
-    //Ethernet.init(10);  // Most Arduino shields
-    //Ethernet.init(5);   // MKR ETH shield
-    //Ethernet.init(0);   // Teensy 2.0
-    //Ethernet.init(20);  // Teensy++ 2.0
-    //Ethernet.init(15);  // ESP8266 with Adafruit Featherwing Ethernet
-    //Ethernet.init(33);  // ESP32 with Adafruit Featherwing Ethernet
-    Ethernet.begin(mac, ip);  // initialize Ethernet device
-    server.begin(); // Start to listen for clients
-    servo.attach(9); // PIN to attach servo
-    servo.write(default_degree);
-    Serial.begin(115200);
+  // You can use Ethernet.init(pin) to configure the CS pin
+  //Ethernet.init(10);  // Most Arduino shields
+  //Ethernet.init(5);   // MKR ETH shield
+  //Ethernet.init(0);   // Teensy 2.0
+  //Ethernet.init(20);  // Teensy++ 2.0
+  //Ethernet.init(15);  // ESP8266 with Adafruit Featherwing Ethernet
+  //Ethernet.init(33);  // ESP32 with Adafruit Featherwing Ethernet
+  Ethernet.begin(mac, ip);  // initialize Ethernet device
+  server.begin(); // Start to listen for clients
+  Serial.begin(115200);
+  Udp.begin(wolPort);
 }
  
 void loop()
@@ -50,9 +53,13 @@ void loop()
 }
 
 void server_on() {
-  servo.write(power_on_degree);
-  delay(500);
-  servo.write(default_degree);
+  byte preamble[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+  char i;
+  Udp.beginPacket(broadCastIp, wolPort);
+  Udp.write(preamble, sizeof preamble);
+  for (i=0; i<16; i++)
+    Udp.write(remote_MAC_ADD, sizeof remote_MAC_ADD);
+  Udp.endPacket();
 }
 
 void handleClientRequest(EthernetClient client) {
@@ -70,14 +77,10 @@ void handleClientRequest(EthernetClient client) {
     // PC Version
     setHTML(client, h1_font_size, button_font_size, action_name);
   }
-  // check the button status to rotate servo
   if (request.indexOf("Btn=on") != -1) {
-    // "on" button to rotate for 30 degree
     server_on();
     client.println("<p>server power is on.</p>");
   } else if (request.indexOf("Btn=off") != -1) {
-    // "off" button to rotate for 90 degree.
-    //servo.write(power_off_degree);
     client.println("<p>server power is off.</p>");
   }
 
